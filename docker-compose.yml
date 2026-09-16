@@ -1,0 +1,36 @@
+# 纸故事卡学习路径 API
+# 只有 api 常驻；verify 在 api 健康后跑测试 + 生产接口冒烟并退出。
+
+services:
+  api:
+    build: .
+    image: papercards-api:latest
+    ports:
+      # API_PORT 可覆盖宿主端口，默认 8000；容器内固定 8000
+      - "${API_PORT:-8000}:8000"
+    environment:
+      PAPERCARDS_DB: /app/data/papercards.db
+    volumes:
+      - papercards-data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status==200 else 1)"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  verify:
+    image: papercards-api:latest
+    build: .
+    command: ["python", "scripts/verify.py"]
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_URL: http://api:8000
+    profiles:
+      - verify
+    restart: "no"
+
+volumes:
+  papercards-data:
